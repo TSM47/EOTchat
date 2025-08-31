@@ -1,4 +1,4 @@
-import { Ticket, SearchResult, SearchFilters, TicketStatus, TicketPriority, TicketCategory } from '@/types';
+import { Ticket, SearchResult, SearchFilters, TicketStatus, TicketCategory } from '@/types';
 
 export class SearchService {
   private static instance: SearchService;

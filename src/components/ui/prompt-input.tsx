@@ -9,7 +9,8 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-import type { ChatStatus } from 'ai';
+// import type { ChatStatus } from 'ai';
+type ChatStatus = 'idle' | 'submitted' | 'streaming' | 'error';
 import { Loader2Icon, SendIcon, SquareIcon, XIcon } from 'lucide-react';
 import type {
   ComponentProps,
