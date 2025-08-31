@@ -90,5 +90,7 @@ export interface ChatMessage {
   content: string;
   isUser: boolean;
   timestamp: Date;
+  isStreaming?: boolean;
+  reasoning?: string;
   sources?: TicketSource[];
 }

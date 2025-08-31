@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   PromptInput,
   PromptInputTextarea,
@@ -11,6 +11,12 @@ import {
 import { RippleButton } from '@/components/ui/ripple-button';
 import { TicketCard } from '@/components/TicketCard';
 import { IconBadge } from '@/components/IconBadge';
+import { Message } from '@/components/Message';
+import { 
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton
+} from '@/components/ui/conversation';
 import { 
   WarningIcon, 
   TagIcon, 
@@ -23,7 +29,8 @@ import {
   SearchIcon
 } from '@/components/ui/icons';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TicketCategory } from '@/types';
+import { TicketCategory, ChatMessage } from '@/types';
+import { useAI } from '@/hooks/ai/useAI';
 import LightRays from '@/components/LightRays';
 import {
   Accordion,
@@ -42,6 +49,11 @@ import {
 
 const ChatArea = () => {
   const [isLoading, setIsLoading] = React.useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [inputValue, setInputValue] = useState('');
+  const [showChat, setShowChat] = useState(false);
+  
+  const { queryAI, isLoading: aiLoading } = useAI();
   
   const ticketCards = [
     {
@@ -71,6 +83,107 @@ const ChatArea = () => {
     // Simulate loading
     setTimeout(() => setIsLoading(false), 2000);
   };
+
+  const handleSendMessage = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!inputValue.trim() || aiLoading) return;
+
+    const userMessage: ChatMessage = {
+      id: `user_${Date.now()}`,
+      content: inputValue.trim(),
+      isUser: true,
+      timestamp: new Date(),
+    };
+
+    // Add user message and show chat
+    setMessages(prev => [...prev, userMessage]);
+    setShowChat(true);
+    setInputValue('');
+
+    try {
+      // Add streaming AI message
+      const aiMessageId = `ai_${Date.now()}`;
+      const streamingMessage: ChatMessage = {
+        id: aiMessageId,
+        content: '',
+        isUser: false,
+        timestamp: new Date(),
+        isStreaming: true,
+        reasoning: 'Analizuję Twoje zapytanie i szukam odpowiedzi w bazie wiedzy EOT...',
+      };
+
+      setMessages(prev => [...prev, streamingMessage]);
+
+      // Call AI service
+      await queryAI(userMessage.content);
+
+      // Update with actual AI response (this will be handled by useEffect)
+    } catch (error) {
+      console.error('Error sending message:', error);
+      
+      // Update with error message
+      setMessages(prev => prev.map(msg => 
+        msg.id === `ai_${Date.now()}` 
+          ? {
+              ...msg,
+              content: 'Przepraszam, wystąpił błąd podczas przetwarzania Twojego zapytania. Spróbuj ponownie.',
+              isStreaming: false,
+              reasoning: undefined,
+            }
+          : msg
+      ));
+    }
+  }, [inputValue, aiLoading, queryAI]);
+
+  // Handle AI response
+  React.useEffect(() => {
+    if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      if (!lastMessage.isUser && lastMessage.isStreaming) {
+        // Simulate AI response after a delay
+        const timer = setTimeout(() => {
+          setMessages(prev => prev.map(msg => 
+            msg.id === lastMessage.id 
+              ? {
+                  ...msg,
+                  content: `Rozumiem Twoje zapytanie dotyczące: "${inputValue}". 
+
+Na podstawie analizy bazy wiedzy EOT, oto moja odpowiedź:
+
+**Analiza problemu:**
+Twoje zapytanie zostało sklasyfikowane jako problem techniczny wymagający szczegółowej analizy.
+
+**Zalecane kroki:**
+1. Sprawdź podstawowe połączenia i konfigurację
+2. Zweryfikuj logi systemowe
+3. Skontaktuj się z zespołem technicznym jeśli problem persystuje
+
+**Dodatkowe informacje:**
+Jeśli potrzebujesz bardziej szczegółowej pomocy, opisz dokładnie objawy problemu i środowisko, w którym występuje.`,
+                  isStreaming: false,
+                  reasoning: undefined,
+                  sources: [
+                    {
+                      ticketId: 'EOT-2024-001',
+                      relevanceScore: 0.85,
+                      matchedContent: 'Podobny problem techniczny'
+                    },
+                    {
+                      ticketId: 'EOT-2024-015',
+                      relevanceScore: 0.72,
+                      matchedContent: 'Rozwiązanie systemowe'
+                    }
+                  ]
+                }
+              : msg
+          ));
+        }, 2000);
+
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [messages, inputValue]);
 
   return (
     <div className="flex-1 flex flex-col bg-background h-full relative">
@@ -108,7 +221,29 @@ const ChatArea = () => {
             </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col justify-center items-center p-8 relative z-10">
+      <div className="flex-1 flex flex-col relative z-10">
+        {showChat ? (
+          /* Chat Conversation */
+          <Conversation className="flex-1">
+            <ConversationContent>
+              {messages.map((message) => (
+                <Message
+                  key={message.id}
+                  id={message.id}
+                  content={message.content}
+                  isUser={message.isUser}
+                  timestamp={message.timestamp}
+                  isStreaming={message.isStreaming}
+                  reasoning={message.reasoning}
+                  sources={message.sources}
+                />
+              ))}
+            </ConversationContent>
+            <ConversationScrollButton />
+          </Conversation>
+        ) : (
+          /* Welcome Screen */
+          <div className="flex-1 flex flex-col justify-center items-center p-8">
         {/* Greeting */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-4">
@@ -290,35 +425,44 @@ const ChatArea = () => {
             </AccordionItem>
           </Accordion>
         </div>
-
-
+          </div>
+        )}
       </div>
 
       {/* Input Area */}
       <div className="p-4 pb-6 relative z-10">
         <div className="max-w-4xl mx-auto">
-          <PromptInput>
-            <PromptInputTextarea placeholder="Opisz problem zgłoszenia z którym masz trudności..." />
+          <PromptInput onSubmit={handleSendMessage}>
+            <PromptInputTextarea 
+              placeholder="Opisz problem zgłoszenia z którym masz trudności..." 
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              disabled={aiLoading}
+            />
             <PromptInputToolbar>
               <PromptInputTools>
-                <PromptInputButton className="cursor-pointer">
+                <PromptInputButton className="cursor-pointer" disabled={aiLoading}>
                   <ClipboardIcon className="w-4 h-4 mr-2" />
                   Rodzaj zgłoszenia
                 </PromptInputButton>
-                <PromptInputButton className="cursor-pointer">
+                <PromptInputButton className="cursor-pointer" disabled={aiLoading}>
                   <ImageIcon className="w-4 h-4 mr-2" />
                   Załącz zrzut ekranu
                 </PromptInputButton>
-                <PromptInputButton className="cursor-pointer">
+                <PromptInputButton className="cursor-pointer" disabled={aiLoading}>
                   <CopyIcon className="w-4 h-4 mr-2" />
                   Podobne zgłoszenia
                 </PromptInputButton>
-                <PromptInputButton className="cursor-pointer">
+                <PromptInputButton className="cursor-pointer" disabled={aiLoading}>
                   <SearchIcon className="w-4 h-4 mr-2" />
                   Szukaj w sieci
                 </PromptInputButton>
               </PromptInputTools>
-              <RippleButton type="submit" className="px-3">
+              <RippleButton 
+                type="submit" 
+                className="px-3"
+                disabled={!inputValue.trim() || aiLoading}
+              >
                 <SendIcon />
               </RippleButton>
             </PromptInputToolbar>
